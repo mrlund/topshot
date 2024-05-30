@@ -4,6 +4,8 @@ import cv2 as cv
 # ---------------------
 
 
+# Initialize the target image and calculate the center of the target and the perspective
+
 targetImg = topshotlib.load_convert_image('./target.jpg')
 bw_img = topshotlib.convertToBW(targetImg.copy())
 

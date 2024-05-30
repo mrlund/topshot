@@ -18,6 +18,25 @@ def load_convert_image(image_path):
 
     return img
 
+def load_convert_image_from_bytes(image_bytes):
+    # Convert bytes to numpy array
+    nparr = np.frombuffer(image_bytes, np.uint8)
+
+    # Decode the image
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    # Resize the image
+    scale_percent = 60 # percent of original size
+    width = int(img.shape[1] * scale_percent / 100)
+    height = int(img.shape[0] * scale_percent / 100)
+    dim = (width, height)
+    img = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+
+    # Apply a blur to reduce noise
+    img = cv2.medianBlur(img,5)
+
+    return img
+
 def convertToBW(image):
     gray_image = cv.cvtColor(image.copy(), cv.COLOR_BGR2GRAY)
     ret, bw_img = cv.threshold(gray_image, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
