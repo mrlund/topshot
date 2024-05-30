@@ -105,28 +105,3 @@ def find_circles(image):
         circles.append(nextRad)
 
     return circles, targetCenterX, targetCenterY
-# Start of the program
-# ---------------------
-
-
-targetImg = load_convert_image('./target.jpg')
-bw_img = convertToBW(targetImg.copy())
-
-circles, targetCenterX, targetCenterY = find_circles(bw_img)
-points = []
-fileNames = ['./target-0.jpg', './target-1.jpg', './target-2.jpg', './target-3.jpg', './target-4.jpg']
-prevImg = convertToBW(load_convert_image(fileNames[0]))
-for i in range(4): 
-     nextImg = convertToBW(load_convert_image(fileNames[i+1]))
-     point, prevImg = compare_and_markup(targetImg, prevImg, nextImg, circles, targetCenterX, targetCenterY)
-     points.append(point)
-
-scores = ' | '.join(map(str, points))
-scores = scores + " | Total: " + str(sum(points))
-print(scores)
-# Write the scores to the image at the bottom
-font = cv.FONT_HERSHEY_SIMPLEX
-center_x = targetImg.shape[1] // 2
-bottom_y = targetImg.shape[0] - 40  # 10 pixels from the bottom
-cv.putText(targetImg, scores, (center_x, bottom_y), font, 2, (255, 0, 0), 2, cv.LINE_AA)
-cv.imwrite('Results.jpg', targetImg)
