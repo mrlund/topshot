@@ -40,23 +40,30 @@ circles, targetCenter = calculate_target_zones(corrected)
 # Set the capture rate  
 capture_rate = 1  # captures every 1 second  
 image_count = 0  
-previous_image = {}  
+#previous_image = correct_perspective(camera.capture_array(), M, side_len)  
+previous_image = cv.imread("Capture-0.jpg")
 hits = []
 scores = []
+print("Starting!")
 
-while len(hits) < 10:  
+test_images = ["Capture-0.jpg", "Capture-1.jpg"]
+
+while len(hits) < 1:  
     # Capture an image  
-    image_array = correct_perspective(camera.capture_array())
-
-    if previous_image:
-        hitX, hitY = find_hit_coordinates(previous_image, image_array)
-        if hitX and hitY:
-            print("Hit! ", hitX, hitY)
-            hits.append([hitX,hitY])
-            scores.append(score_hit(hitX, hitY, circles))
-            image_count += 1  
-      
+    #image_array = correct_perspective(camera.capture_array(), M, side_len)
+    #cv.imwrite("Capture-" + str(image_count) + ".jpg", image_array)
+    image_array = cv.imread("Capture-1.jpg")
+    image_count += 1  
+    hitX, hitY = find_hit_coordinates(previous_image, image_array)
+    if hitX and hitY:
+        hits.append([hitX,hitY])
+        score = score_hit(hitX, hitY, circles)
+        scores.append(score)
+        print("Hit! ", hitX, hitY, score, image_count)
+    else:
+        print("No hit found")
     # Wait for the next capture  
+    previous_image = image_array
     time.sleep(capture_rate)  
 
 totalScore = 0

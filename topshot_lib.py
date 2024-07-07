@@ -90,6 +90,9 @@ def calculate_perspective_shift(image_array):
 
 
 def correct_perspective(image_array, rotation_matrix, side_len):
+    if len(image_array.shape) == 3 and image_array.shape[2] == 3:  
+        image_array = cv2.cvtColor(image_array, cv2.COLOR_BGR2GRAY)  
+
     img_transformed = cv2.warpPerspective(image_array, rotation_matrix, (side_len, side_len))
     cv2.imwrite("normalized_target_debug.jpg", img_transformed)
     return img_transformed
@@ -115,6 +118,12 @@ def calculate_target_zones(image_array):
     return circles, width / 2
 
 def find_hit_coordinates(prev_image_array, new_image_array):
+
+    if len(prev_image_array.shape) == 3 and prev_image_array.shape[2] == 3:  
+        prev_image_array = cv2.cvtColor(prev_image_array, cv2.COLOR_BGR2GRAY)  
+    if len(new_image_array.shape) == 3 and new_image_array.shape[2] == 3:  
+        new_image_array = cv2.cvtColor(new_image_array, cv2.COLOR_BGR2GRAY)  
+
     diff = cv2.absdiff(prev_image_array, new_image_array)
 
     # Find contours in the difference image
@@ -136,6 +145,9 @@ def find_hit_coordinates(prev_image_array, new_image_array):
         y = y + coord[0][1]
     x = x / len(coords)
     y = y / len(coords)
+
+    cv2.imwrite("hit-" + str(int(x)) + ".jpg", contour_img)
+
     return x, y
 
 def score_hit(x, y, zones):
