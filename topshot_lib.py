@@ -3,7 +3,7 @@ import numpy as np
 import random
 
 
-def find_target_and_correct_perspective(image_array):
+def find_target(image_array):
     if len(image_array.shape) == 3 and image_array.shape[2] == 3:  
         image_array = cv2.cvtColor(image_array, cv2.COLOR_BGR2GRAY)  
       
@@ -21,71 +21,98 @@ def find_target_and_correct_perspective(image_array):
       
     # Select the second largest contour  
     second_largest_contour = contours[1]  
-      
+    x, y, w, h = cv2.boundingRect(second_largest_contour)
+    zoneWidth = int(w / 8)
+    x = x - zoneWidth
+    y = y - zoneWidth
+    w = w + zoneWidth
+    h = h + zoneWidth
+    # Step 2: Draw the rectangle around the second largest contour
+    # Parameters: image, top-left corner, bottom-right corner, color (BGR), thickness
     # Debug: Draw only the second largest contour  
     debug_img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)  # Convert to BGR for colored contours  
+    cv2.rectangle(debug_img, (x, y), (x+w, y+h), (0, 255, 0), 2)     
     cv2.drawContours(debug_img, [second_largest_contour], -1, (0, 255, 0), 2)  
       
     cv2.imwrite("normalized_target_debug.jpg", debug_img)  
-      
-    # Fit an ellipse to the second largest contour  
-    if len(second_largest_contour) < 5:  
-        raise ValueError("Not enough points to fit an ellipse.")  
-    ellipse = cv2.fitEllipse(second_largest_contour)  
-      
-    # Calculate the scaling factors  
-    (center, axes, angle) = ellipse  
-    major_axis_length = max(axes)  
-    minor_axis_length = min(axes)  
-    scale_x = major_axis_length / minor_axis_length  
-    scale_y = 1.0  # No scaling in the y direction  
-      
-    # Calculate the transformation matrix to make the ellipse a circle  
-    M = cv2.getRotationMatrix2D(center, angle, scale_x)  
-      
-    # Apply the transformation to the image  
-    img_transformed = cv2.warpAffine(img, M, (img.shape[1], img.shape[0]))  
-      
-    # Save the transformed image  
-    cv2.imwrite("normalized_target.jpg", img_transformed)
-    return M, img.shape[1], img.shape[0]  
+          # return M, img.shape[1], img.shape[0]  
+    return x, y, w, h
 
-def get_target_and_correct_perspective(image_array, rotation_matrix, shapeX, shapeY):
-    img_transformed = cv2.warpAffine(image_array, rotation_matrix, shapeX, shapeY)
+def calculate_perspective_shift(image_array):
+
+    if len(image_array.shape) == 3 and image_array.shape[2] == 3:  
+        image_array = cv2.cvtColor(image_array, cv2.COLOR_BGR2GRAY)  
+      
+    # Threshold the image  
+    _, img = cv2.threshold(image_array, 50, 255, cv2.THRESH_BINARY)  
+      
+    # Find contours in the image  
+    contours, _ = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)  
+      
+    if len(contours) < 2:  
+        raise ValueError("Not enough contours found in the image.")  
+      
+    # Sort contours by area in descending order  
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)  
+      
+    # Select the second largest contour  
+    second_largest_contour = contours[1]  
+    x, y, w, h = cv2.boundingRect(second_largest_contour)
+    # Assuming x, y, w, h are the x-coordinate, y-coordinate, width, and height of the original rectangle
+    # center_x = x + w / 2
+    # center_y = y + h / 2
+
+    # # Increase size by 25%
+    # w = w * 1.25
+    # h = h * 1.25
+
+    # # Adjust top-left corner to keep the center the same
+    # x = center_x - w / 2
+    # y = center_y - h / 2
+
+    # Step 2: Define the points of the bounding box in the source image
+    src_pts = np.float32([[x, y], [x+w, y], [x+w, y+h], [x, y+h]])
+
+    # Step 3: Define the target points for the square (assuming width == height for a perfect circle)
+    side_len = max(w, h)
+    dst_pts = np.float32([[0, 0], [side_len, 0], [side_len, side_len], [0, side_len]])
+
+    # Step 4: Calculate the perspective transform matrix
+    M = cv2.getPerspectiveTransform(src_pts, dst_pts)
+
+    #print(M, side_len)
+    # Step 5: Apply the perspective warp transformation
+    #warped_img = cv2.warpPerspective(img, M, (side_len, side_len))
+    #cv2.imwrite("normalized_target_debug-1.jpg", warped_img)
+      
+
+    return M, side_len
+
+
+def correct_perspective(image_array, rotation_matrix, side_len):
+    img_transformed = cv2.warpPerspective(image_array, rotation_matrix, (side_len, side_len))
+    cv2.imwrite("normalized_target_debug.jpg", img_transformed)
     return img_transformed
 
 def calculate_target_zones(image_array):
-    # Find the black center of the target
-    circles = cv2.HoughCircles(image_array, cv2.HOUGH_GRADIENT, 1, 20, param1=700, param2=100, minRadius=50, maxRadius=0)
-    circles = np.uint16(np.around(circles))
 
-    max_radius = 0
-    max_circle = None
-    for i in circles[0,:]:
-        if i[2] > max_radius:
-            max_radius = i[2]
-            max_circle = i
-
-    # Draw the max circle on the image
-    targetCenterX = max_circle[0]
-    targetCenterY = max_circle[1]
-    cv2.circle(image_array,(targetCenterX,targetCenterY),max_circle[2],(0,255,0),2)
-
-    # Get the diameter of the circle
-    diameter = max_circle[2] * 2
-    distanceBetween = int(diameter / 8); 
+    height, width = image_array.shape[:2]
+    center = int(width/2)
+    distanceBetween = int(width / 8); 
     # Draw the center of the circle
-    cv2.circle(image_array,(max_circle[0],max_circle[1]),2,(0,0,255),3)
-    nextRad = 2
+    cv2.circle(image_array,(center, center),distanceBetween,(0,0,255),3)
+    nextRad = distanceBetween
     # new array of circles
     circles = []
 
-    # Draw the 8 points on the circle
-    for i in range(8):
+    # Draw the 4 circles
+    for i in range(4):
         nextRad = nextRad + distanceBetween
+        cv2.circle(image_array,(center, center),nextRad,(0,0,255),3)
         circles.append(nextRad)
 
-    return circles, targetCenterX, targetCenterY
+    cv2.imwrite("circles.jpg", image_array)
+    return circles, width / 2
 
 def find_hit_coordinates(prev_image_array, new_image_array):
     diff = cv2.absdiff(prev_image_array, new_image_array)
