@@ -2,6 +2,7 @@ import time
 from picamera2 import Picamera2  
 import cv2 as cv
 import normalize_target
+from topshot_lib import calculate_target_zones, draw_hit_and_score, find_hit_coordinates, find_target_and_correct_perspective, get_target_and_correct_perspective, score_hit
 
   
 def process_and_save_image(image_array, image_path):  
@@ -21,7 +22,13 @@ camera_config['main']['size'] = (4608, 2592)
   
 # Apply the configuration  
 camera.configure(camera_config)  
-  
+
+
+camera.start()
+target_array = camera.capture_array()
+M, x, y = find_target_and_correct_perspective()
+circles, targetCenterX, targetCenterY = calculate_target_zones(target_array)
+
 # Set the Region of Interest (ROI) for cropping  
 # The values are actual pixel values (left, top, width, height)  
 roi_left = 1992  # Starting x position (25% of 4608)  
@@ -33,21 +40,27 @@ camera.set_controls({"ScalerCrop": (roi_left, roi_top, roi_width, roi_height)})
 # Set the capture rate  
 capture_rate = 1  # captures every 1 second  
 image_count = 0  
-  
-camera.start()
-while True:  
-    # Capture an image  
-    image_path = f'image_{image_count}.jpg'  
-    image_array = camera.capture_array()  
+previous_image = {}  
+hits = []
+scores = []
 
-    process_and_save_image(image_array, image_path) 
-    #normalize_target.normalize_and_save_image(image_array, image_path,  debug_path="debug_image.jpg")
-  
-    # Run your image processing script here  
-    #process_image(image_path)  
-      
-    # Increment the image count  
-    image_count += 1  
+while len(hits) < 10:  
+    # Capture an image  
+    image_array = get_target_and_correct_perspective(camera.capture_array())
+
+    if previous_image:
+        hitX, hitY = find_hit_coordinates(previous_image, image_array)
+        if hitX:
+            hits.append([hitX,hitY])
+            scores.append(score_hit(hitX, hitY, circles))
+            image_count += 1  
       
     # Wait for the next capture  
     time.sleep(capture_rate)  
+
+totalScore = 0
+for i in len(hits):
+    draw_hit_and_score(image_array, hits[i][1], hits[i][2])
+    totalScore += scores[i]
+
+
