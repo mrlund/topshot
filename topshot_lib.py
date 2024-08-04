@@ -100,6 +100,7 @@ def correct_perspective(image_array, rotation_matrix, side_len):
 def calculate_target_zones(image_array):
 
     height, width = image_array.shape[:2]
+    print("target image is ", height, width)
     center = int(width/2)
     distanceBetween = int(width / 8); 
     # Draw the center of the circle
@@ -111,6 +112,7 @@ def calculate_target_zones(image_array):
     # Draw the 4 circles
     for i in range(4):
         nextRad = nextRad + distanceBetween
+        print("Cirle with radius ", nextRad)
         cv2.circle(image_array,(center, center),nextRad,(0,0,255),3)
         circles.append(nextRad)
 
@@ -205,7 +207,19 @@ def find_hit_coordinates(prev_image_array, new_image_array, min_area=100):
     cv2.circle(hit_location_img, (int(center[0]), int(center[1])), radius, (0, 0, 255), 2)
     cv2.imwrite("hit_location.jpg", hit_location_img)  # Save the image with the hit location marked
 
-    return center, radius
+    # Assuming prev_image_array and new_image_array have the same dimensions
+    image_height, image_width = new_image_array.shape[:2]
+
+    # Calculate the center of the image
+    image_center_x = image_width // 2
+    image_center_y = image_height // 2
+
+    # Offset the detected center
+    offset_center_x = center[0] - image_center_x
+    offset_center_y = center[1] - image_center_y
+
+    # Return the offset center and radius
+    return (offset_center_x, offset_center_y), radius
 
 def score_hit(center, radius, zones):
         # Calculate the smallest circle that contains any parts of the coords

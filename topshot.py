@@ -70,6 +70,7 @@ totalScore = 0
 print(hits)
 for hit in hits:
     draw_hit_and_score(image_array, hit[0], hit[1], 5)
+    cv.imwrite("Finalscore.jpg", image_array)
 for score in scores:
     totalScore += score
 print("Total: ", totalScore)
