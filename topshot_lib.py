@@ -116,41 +116,98 @@ def calculate_target_zones(image_array):
 
     cv2.imwrite("circles.jpg", image_array)
     return circles, width / 2
+    # Function to calculate the bounding box area and aspect ratio of a contour
 
-def find_hit_coordinates(prev_image_array, new_image_array):
+def contour_area_and_perimeter(contour):
+    area = cv2.contourArea(contour)
+    perimeter = cv2.arcLength(contour, True)
+    return area, perimeter
 
-    if len(prev_image_array.shape) == 3 and prev_image_array.shape[2] == 3:  
-        prev_image_array = cv2.cvtColor(prev_image_array, cv2.COLOR_BGR2GRAY)  
-    if len(new_image_array.shape) == 3 and new_image_array.shape[2] == 3:  
-        new_image_array = cv2.cvtColor(new_image_array, cv2.COLOR_BGR2GRAY)  
+def filter_contours(contours, min_area, max_area):
+    filtered_contours = []
+    for contour in contours:
+        area, perimeter = contour_area_and_perimeter(contour)
+        if min_area <= area <= max_area:
+            filtered_contours.append((contour, area, perimeter))
+    return filtered_contours
 
-    diff = cv2.absdiff(prev_image_array, new_image_array)
+def preprocess_and_draw_contours(prev_image_array, new_image_array, tolerance=100, min_area=500, max_area=3000):
+    prev_image_copy = prev_image_array.copy()
+    new_image_copy = new_image_array.copy()
 
-    # Find contours in the difference image
-    contours, _ = cv2.findContours(diff, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    areas = [cv2.contourArea(contour) for contour in contours]
-    max_index = np.argmax(areas)
-    contour_img = np.zeros_like(diff)
+    if len(prev_image_copy.shape) == 3 and prev_image_copy.shape[2] == 3:  
+        prev_image_copy = cv2.cvtColor(prev_image_copy, cv2.COLOR_BGR2GRAY)  
 
-    # Draw only the largest contour
-    cv2.drawContours(contour_img, contours, max_index, (255), thickness=cv2.FILLED)
-    # Find the coordinates of the largest difference
-    coords = cv2.findNonZero(contour_img)
+    if len(new_image_copy.shape) == 3 and new_image_copy.shape[2] == 3:  
+        new_image_copy = cv2.cvtColor(new_image_copy, cv2.COLOR_BGR2GRAY)
 
-    # find the average value of the coordinates on both axis
-    x = 0
-    y = 0
-    for coord in coords:
-        x = x + coord[0][0]
-        y = y + coord[0][1]
-    x = x / len(coords)
-    y = y / len(coords)
+    _, prev_binary = cv2.threshold(prev_image_copy, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    _, new_binary = cv2.threshold(new_image_copy, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    cv2.imwrite("hit-" + str(int(x)) + ".jpg", contour_img)
+    prev_contours, _ = cv2.findContours(prev_binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    prev_contours = filter_contours(prev_contours, min_area, max_area)
 
-    return x, y
+    new_contours, _ = cv2.findContours(new_binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    new_contours = filter_contours(new_contours, min_area, max_area)
 
-def score_hit(x, y, zones):
+    # Debug: Draw previous contours
+    prev_contours_img = np.ones_like(prev_binary) * 255
+    for contour, _, _ in prev_contours:
+        cv2.drawContours(prev_contours_img, [contour], -1, (0, 0, 0), thickness=1)
+    #cv2.imwrite("debug_prev_contours.jpg", prev_contours_img)
+
+    # Debug: Draw new contours
+    new_contours_img = np.ones_like(new_binary) * 255
+    for contour, _, _ in new_contours:
+        cv2.drawContours(new_contours_img, [contour], -1, (0, 0, 0), thickness=1)
+    #cv2.imwrite("debug_new_contours.jpg", new_contours_img)
+
+    remaining_contours = []
+    for new_contour, new_area, new_perimeter in new_contours:
+        match_found = False
+        for prev_contour, prev_area, prev_perimeter in prev_contours:
+            if abs(new_area - prev_area) < tolerance and abs(new_perimeter - prev_perimeter) < tolerance:
+                match_found = True
+                break
+        if not match_found:
+            remaining_contours.append(new_contour)
+
+    result_img = np.ones_like(new_binary) * 255
+    cv2.drawContours(result_img, remaining_contours, -1, (0, 0, 0), thickness=1)
+    #cv2.imwrite("debug_remaining_contours.jpg", result_img)
+
+    if remaining_contours:
+        # Fit a circle around the first remaining contour
+        (x, y), radius = cv2.minEnclosingCircle(remaining_contours[0])
+        center = (int(x), int(y))
+        radius = int(radius)
+        return center, radius
+    else:
+        return None, None
+
+def find_hit_coordinates(prev_image_array, new_image_array, min_area=100):
+
+    # Preprocess the images and draw contours
+    center, radius = preprocess_and_draw_contours(prev_image_array, new_image_array)
+
+    if center is None or radius is None:
+        print("No hit detected")
+        return None, None
+
+    print(f"Hit detected at {center} with radius {radius}")
+        # Mark the hit location on the original image
+    # Check if the new_image_array is already in BGR format
+    if len(new_image_array.shape) == 2:  # Grayscale image
+        hit_location_img = cv2.cvtColor(new_image_array, cv2.COLOR_GRAY2BGR)
+    else:  # Already in BGR format
+        hit_location_img = new_image_array.copy()
+
+    cv2.circle(hit_location_img, (int(center[0]), int(center[1])), radius, (0, 0, 255), 2)
+    cv2.imwrite("hit_location.jpg", hit_location_img)  # Save the image with the hit location marked
+
+    return center, radius
+
+def score_hit(center, radius, zones):
         # Calculate the smallest circle that contains any parts of the coords
     # Find the minimum and maximum x and y coordinates
     # min_x = np.min(coords[:,0,0])
@@ -158,14 +215,16 @@ def score_hit(x, y, zones):
 
 
     # iterate the circles and find the smallest circle that contains the coordinates
+    x, y = center[0], center[1]
     min_circle = None
     points = 0
     for circle in zones:
+        print(circle)
     # Calculate the distance from the point to the center of the circle
         distance = (x ** 2 + y ** 2) ** 0.5
-
+        print(distance)
         # Check if the distance is less than the radius
-        if distance < circle + 10:
+        if distance < circle + radius:
             min_circle = circle
             #print the index of the circle
             points = (10 - zones.index(circle))
@@ -176,6 +235,6 @@ def score_hit(x, y, zones):
 
 def draw_hit_and_score(image_array, x, y, score):
     cv2.circle(image_array,(int(x),int(y)),20,(255,0,0),3)
-    cv2.putText(image_array, score, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 2, cv2.LINE_AA)
+    cv2.putText(image_array, str(score), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 2, cv2.LINE_AA)
     return image_array
 

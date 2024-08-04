@@ -54,12 +54,12 @@ while len(hits) < 1:
     #cv.imwrite("Capture-" + str(image_count) + ".jpg", image_array)
     image_array = cv.imread("Capture-1.jpg")
     image_count += 1  
-    hitX, hitY = find_hit_coordinates(previous_image, image_array)
-    if hitX and hitY:
-        hits.append([hitX,hitY])
-        score = score_hit(hitX, hitY, circles)
+    center, radius = find_hit_coordinates(previous_image, image_array)
+    if center and radius:
+        hits.append([center[0],center[1]])
+        score = score_hit(center, radius, circles)
         scores.append(score)
-        print("Hit! ", hitX, hitY, score, image_count)
+        print("Hit! ", center[0],center[1], score, image_count)
     else:
         print("No hit found")
     # Wait for the next capture  
@@ -67,8 +67,10 @@ while len(hits) < 1:
     time.sleep(capture_rate)  
 
 totalScore = 0
-for i in len(hits):
-    draw_hit_and_score(image_array, hits[i][1], hits[i][2])
-    totalScore += scores[i]
-
+print(hits)
+for hit in hits:
+    draw_hit_and_score(image_array, hit[0], hit[1], 5)
+for score in scores:
+    totalScore += score
+print("Total: ", totalScore)
 
